@@ -1,34 +1,212 @@
 pipeline {
     agent any
-    
+
+    tools {
+        maven 'M3'
+        jdk 'JDK17'
+    }
+
+    environment {
+        // Configuration des credentials
+        DOCKERHUB_CREDENTIALS = credentials('docker-hub-credentials')
+        SONAR_SCANNER_HOME = tool 'SonarScanner'
+        NEXUS_URL = 'http://nexus-server:8081'
+        
+        // Variables pour les images et artefacts
+        DOCKER_IMAGE = "mohamedsaadaoui/adoption-animaux:${env.BUILD_ID}"
+        ARTIFACT_NAME = "adoption-Project-0.0.1-SNAPSHOT.jar"
+    }
+
     stages {
-        stage('Checkout Git') {
+        // 1. RÉCUPÉRATION DU PROJET DE GIT
+        stage('Récupération Git') {
             steps {
-                git branch: 'master', url: 'https://github.com/mohamedsaadaoui/adoption-animaux.git'
+                echo "📦 Étape 1: Récupération du code depuis Git"
+                git branch: 'master', 
+                    url: 'https://github.com/mohamedsaadaoui/adoption-animaux.git'
             }
         }
-        
-        stage('Build Application') {
+
+        // 2. COMPILATION DU PROJET
+        stage('Compilation') {
             steps {
+                echo "🔨 Étape 2: Compilation du projet Maven"
+                sh 'mvn clean compile'
+            }
+        }
+
+        // 3. LANCEMENT DES TESTS UNITAIRES JUNIT
+        stage('Tests Unitaires JUnit') {
+            steps {
+                echo "🧪 Étape 3: Exécution des tests unitaires"
+                sh 'mvn test -DskipTests=false'
+            }
+            post {
+                always {
+                    // Publication des résultats JUnit
+                    junit 'target/surefire-reports/*.xml'
+                    archiveArtifacts 'target/surefire-reports/*.xml'
+                }
+            }
+        }
+
+        // 4. TESTS DE QUALITÉ DE CODE SONARQUBE
+        stage('Analyse Qualité SonarQube') {
+            steps {
+                echo "📊 Étape 4: Analyse de qualité avec SonarQube"
+                withSonarQubeEnv('sonar-server') {
+                    sh """
+                    mvn sonar:sonar \
+                        -Dsonar.projectKey=adoption-animaux \
+                        -Dsonar.projectName=Adoption-Animaux \
+                        -Dsonar.host.url=\${SONAR_HOST_URL} \
+                        -Dsonar.login=\${SONAR_AUTH_TOKEN}
+                    """
+                }
+            }
+        }
+
+        // 5. PRÉPARATION DE LA VERSION À DISTRIBUER
+        stage('Préparation Version') {
+            steps {
+                echo "📦 Étape 5: Packaging de l'application"
                 sh 'mvn clean package -DskipTests'
+                
+                // Vérification du fichier JAR
+                sh """
+                if [ -f "target/${ARTIFACT_NAME}" ]; then
+                    echo "✅ JAR créé avec succès: ${ARTIFACT_NAME}"
+                    ls -lh target/${ARTIFACT_NAME}
+                else
+                    echo "❌ Erreur: Fichier JAR non trouvé"
+                    exit 1
+                fi
+                """
             }
         }
-        
-        stage('Build Docker Image') {
+
+        // 6. MISE EN PLACE DANS NEXUS
+        stage('Déploiement Nexus') {
             steps {
-                sh 'docker build -t adoption-animaux:latest .'
+                echo "🏺 Étape 6: Déploiement vers Nexus"
+                script {
+                    // Alternative si le plugin Nexus n'est pas disponible
+                    sh """
+                    curl -u \${NEXUS_USER}:\${NEXUS_PASSWORD} \
+                         --upload-file target/${ARTIFACT_NAME} \
+                         ${NEXUS_URL}/repository/maven-releases/com/example/adoption-animaux/1.0.0/${ARTIFACT_NAME}
+                    """
+                }
             }
         }
-        
-        stage('Deploy and Test') {
+
+        // 7. CRÉATION IMAGE DOCKER
+        stage('Build Image Docker') {
             steps {
+                echo "🐳 Étape 7: Construction de l'image Docker"
+                script {
+                    docker.build("${env.DOCKER_IMAGE}")
+                }
+            }
+        }
+
+        // 8. DÉPÔT SUR DOCKERHUB
+        stage('Push DockerHub') {
+            steps {
+                echo "📤 Étape 8: Publication sur DockerHub"
+                script {
+                    docker.withRegistry('', 'docker-hub-credentials') {
+                        docker.image("${env.DOCKER_IMAGE}").push()
+                        docker.image("${env.DOCKER_IMAGE}").push('latest')
+                    }
+                }
+            }
+        }
+
+        // 9. LANCEMENT AVEC DOCKER COMPOSE
+        stage('Déploiement Docker Compose') {
+            steps {
+                echo "🚀 Étape 9: Déploiement avec Docker Compose"
                 sh '''
+                    echo "Arrêt des conteneurs existants..."
                     docker compose down || true
-                    docker compose up -d
-                    sleep 30
-                    curl -f http://localhost:8089/adoption/actuator/health && echo "✅ SUCCESS"
+                    
+                    echo "Démarrage des services..."
+                    docker compose up -d --build
+                    
+                    echo "Attente du démarrage..."
+                    sleep 60
+                    
+                    echo "État des services:"
+                    docker compose ps
                 '''
             }
+        }
+
+        // 10. VALIDATION FINALE
+        stage('Validation Déploiement') {
+            steps {
+                echo "✅ Étape 10: Validation du déploiement"
+                sh '''
+                    echo "Vérification de la santé de l'application..."
+                    curl -f http://localhost:8089/adoption/actuator/health || exit 1
+                    
+                    echo "Test des endpoints API..."
+                    # Test création adoptant
+                    curl -X POST http://localhost:8089/adoption/addAdoptant \
+                         -H "Content-Type: application/json" \
+                         -d '{"nom":"TestJenkins","adresse":"123 Test","telephone":611223344}' \
+                         -w "\\nCode HTTP: %{http_code}\\n"
+                         
+                    echo "✅ Déploiement validé avec succès!"
+                '''
+            }
+        }
+    }
+
+    post {
+        always {
+            echo "🧹 Nettoyage de l'environnement"
+            sh 'docker compose down || true'
+            cleanWs()
+        }
+        success {
+            echo "🎉 PIPELINE RÉUSSI! Toutes les étapes CI/CD sont complètes."
+            emailext (
+                subject: "SUCCÈS: Pipeline Adoption-Animaux - Build #${env.BUILD_NUMBER}",
+                body: """
+                ✅ PIPELINE CI/CD EXÉCUTÉ AVEC SUCCÈS!
+                
+                Détails:
+                - Build: ${env.JOB_NAME} #${env.BUILD_NUMBER}
+                - Durée: ${currentBuild.durationString}
+                - Commit: ${env.GIT_COMMIT}
+                - Lien: ${env.BUILD_URL}
+                
+                Étapes accomplies:
+                ✓ Récupération Git
+                ✓ Compilation Maven
+                ✓ Tests unitaires JUnit
+                ✓ Analyse qualité SonarQube
+                ✓ Packaging application
+                ✓ Déploiement Nexus
+                ✓ Build image Docker
+                ✓ Push DockerHub
+                ✓ Déploiement Docker Compose
+                ✓ Validation finale
+                
+                Application disponible sur: http://localhost:8089/adoption
+                """,
+                to: "enseignant@esprit.tn"
+            )
+        }
+        failure {
+            echo "❌ Pipeline échoué - Vérifier les logs"
+            emailext (
+                subject: "ÉCHEC: Pipeline Adoption-Animaux - Build #${env.BUILD_NUMBER}",
+                body: "Le pipeline CI/CD a échoué. Consulter les logs: ${env.BUILD_URL}",
+                to: "enseignant@esprit.tn"
+            )
         }
     }
 }
