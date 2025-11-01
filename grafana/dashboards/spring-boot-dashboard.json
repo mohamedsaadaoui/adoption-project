@@ -1,0 +1,32 @@
+{
+  "dashboard": {
+    "id": null,
+    "uid": "springboot",
+    "title": "Spring Boot Metrics",
+    "timezone": "browser",
+    "panels": [
+      {
+        "type": "graph",
+        "title": "HTTP Requests",
+        "targets": [
+          {
+            "expr": "http_server_requests_seconds_count{application='adoption-app'}",
+            "legendFormat": "{{method}} {{uri}}",
+            "refId": "A"
+          }
+        ]
+      },
+      {
+        "type": "graph",
+        "title": "Active DB Connections",
+        "targets": [
+          {
+            "expr": "hikaricp_connections_active{application='adoption-app'}",
+            "legendFormat": "Active Connections",
+            "refId": "B"
+          }
+        ]
+      }
+    ]
+  }
+}

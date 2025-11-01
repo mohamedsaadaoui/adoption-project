@@ -37,7 +37,7 @@ class AdoptionServicesImplTest {
         // Given
         Adoptant adoptant = new Adoptant();
         adoptant.setIdAdoptant(1);
-        adoptant.setNom("Dupont");
+        adoptant.setNom("Mohamed");
         adoptant.setAdresse("123 Rue Test");
         adoptant.setTelephone("0123456789");
 
