@@ -1,0 +1,34 @@
+pipeline {
+    agent any
+    
+    stages {
+        stage('Checkout Git') {
+            steps {
+                git branch: 'master', url: 'https://github.com/mohamedsaadaoui/adoption-animaux.git'
+            }
+        }
+        
+        stage('Build Application') {
+            steps {
+                sh 'mvn clean package -DskipTests'
+            }
+        }
+        
+        stage('Build Docker Image') {
+            steps {
+                sh 'docker build -t adoption-animaux:latest .'
+            }
+        }
+        
+        stage('Deploy and Test') {
+            steps {
+                sh '''
+                    docker compose down || true
+                    docker compose up -d
+                    sleep 30
+                    curl -f http://localhost:8089/adoption/actuator/health && echo "✅ SUCCESS"
+                '''
+            }
+        }
+    }
+}
