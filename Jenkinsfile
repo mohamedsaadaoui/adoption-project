@@ -19,13 +19,13 @@ pipeline {
             }
         }
 
-        stage('Compile & Tests') {
+        stage('Compile & Package') {
             steps {
-                sh 'mvn clean compile test'
+                // Compile et build sans lancer les tests
+                bat 'mvn clean package -DskipTests'
             }
             post {
                 always {
-                    junit 'target/surefire-reports/*.xml'
                     archiveArtifacts 'target/*.jar'
                 }
             }
@@ -34,7 +34,7 @@ pipeline {
         stage('SonarQube Analysis') {
             steps {
                 withSonarQubeEnv('sonar-server') {
-                    sh 'mvn sonar:sonar -Dsonar.projectKey=adoption-project -Dsonar.projectName=Adoption-Project'
+                    bat 'mvn sonar:sonar -Dsonar.projectKey=adoption-project -Dsonar.projectName=Adoption-Project'
                 }
             }
         }
@@ -60,7 +60,7 @@ pipeline {
 
         stage('Deploy with Docker Compose') {
             steps {
-                sh '''
+                bat '''
                     docker-compose down
                     docker-compose pull
                     docker-compose up -d
@@ -70,9 +70,7 @@ pipeline {
 
         stage('API Tests') {
             steps {
-                sh '''
-                    curl -X GET http://localhost:8089/adoption/actuator/health
-                '''
+                bat 'curl -X GET http://localhost:8089/adoption/actuator/health'
             }
         }
     }

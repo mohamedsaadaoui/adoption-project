@@ -1,33 +1,21 @@
 global:
-  scrape_interval: 15s
-  evaluation_interval: 15s
+  scrape_interval: 10s
+  evaluation_interval: 10s
 
 scrape_configs:
-  # Prometheus lui-même
   - job_name: 'prometheus'
     static_configs:
       - targets: ['localhost:9090']
 
-  # Application Spring Boot
-  - job_name: 'adoption-spring-app'
-    metrics_path: '/adoption/actuator/prometheus'
+  - job_name: 'adoption-backend'
+    metrics_path: '/actuator/prometheus'
     static_configs:
-      - targets: ['adoption-app:8089']
-    scrape_interval: 10s
-    relabel_configs:
-      - source_labels: [__address__]
-        target_label: instance
-        regex: '(.*)'
-        replacement: 'animal-adoption-app'
+      - targets: ['adoption-spring-app:8089']
 
-  # MySQL Exporter
-  - job_name: 'mysql-exporter'
+  - job_name: 'grafana'
     static_configs:
-      - targets: ['mysql-exporter:9104']
-    labels:
-      group: 'database'
+      - targets: ['adoption-grafana:3000']
 
-alerting:
-  alertmanagers:
-    - static_configs:
-        - targets: []
+  - job_name: 'docker-containers'
+    static_configs:
+      - targets: ['cadvisor:8080']
