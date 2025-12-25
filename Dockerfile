@@ -7,12 +7,12 @@ COPY src ./src
 RUN mvn clean package -DskipTests
 
 # Étape 2 : Image runtime
-FROM eclipse-temurin:17-jre-jammy
+FROM eclipse-temurin:17-jdk
 WORKDIR /app
 COPY --from=builder /app/target/adoption-Project-0.0.1-SNAPSHOT.jar app.jar
 EXPOSE 8089
 
-# Healthcheck fiable (60s pour le démarrage)
+# Healthcheck
 HEALTHCHECK --interval=30s --timeout=5s --start-period=60s --retries=5 \
   CMD curl -f http://localhost:8089/adoption/actuator/health || exit 1
 
