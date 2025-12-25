@@ -7,7 +7,7 @@ COPY src ./src
 RUN mvn clean package -DskipTests
 
 # Étape 2 : Image runtime
-FROM openjdk:17-jdk-slim
+FROM eclipse-temurin:17-jre-jammy
 WORKDIR /app
 COPY --from=builder /app/target/adoption-Project-0.0.1-SNAPSHOT.jar app.jar
 EXPOSE 8089
