@@ -39,7 +39,7 @@ pipeline {
             }
             post {
                 always {
-                    archiveArtifacts 'target/*.jar'
+                    archiveArtifacts 'target/adoption-Project-0.0.1-SNAPSHOT.jar'
                 }
             }
         }
