@@ -17,3 +17,9 @@ scrape_configs:
     static_configs:
       - targets: ['cadvisor:8080']  # ✅ Déjà correct
     scrape_interval: 10s
+
+
+  - job_name: 'mysql'
+    static_configs:
+      - targets: [ 'mysql-db:3306' ]  # Nécessite mysqld_exporter
+    scrape_interval: 15s

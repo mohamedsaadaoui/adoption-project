@@ -12,6 +12,7 @@ pipeline {
     }
 
     stages {
+
         stage('Checkout Git') {
             steps {
                 git branch: 'main',
@@ -19,9 +20,21 @@ pipeline {
             }
         }
 
+        // 🟢 1️⃣ STAGE OBLIGATOIRE : TESTS UNITAIRES
+        stage('Tests unitaires JUnit') {
+            steps {
+                bat 'mvn test'
+            }
+            post {
+                always {
+                    junit 'target/surefire-reports/*.xml'
+                }
+            }
+        }
+
+        // 🟢 2️⃣ COMPILATION APRÈS TESTS
         stage('Compile & Package') {
             steps {
-                // Compile et build sans lancer les tests
                 bat 'mvn clean package -DskipTests'
             }
             post {
@@ -60,11 +73,16 @@ pipeline {
 
         stage('Deploy with Docker Compose') {
             steps {
-                bat '''
-                    docker-compose down
+                bat """
+                    echo ===== Stop and Remove Old Containers =====
+                    docker rm -f adoption-mysql adoption-prometheus adoption-cadvisor adoption-grafana adoption-spring-app || echo "No existing containers to remove"
+
+                    echo ===== Pull Latest Images =====
                     docker-compose pull
+
+                    echo ===== Start Containers =====
                     docker-compose up -d
-                '''
+                """
             }
         }
 
